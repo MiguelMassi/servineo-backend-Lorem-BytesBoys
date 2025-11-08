@@ -1,7 +1,7 @@
-const WhatsAppService = require('./whatsAppService');
-const WhatsAppValidatorService = require('./whatsAppValidatorService');
+import WhatsAppService from './whatsAppService.js';
+import WhatsAppValidatorService from './whatsAppValidatorService.js';
 
-module.exports = {
+export {
   WhatsAppService,
   WhatsAppValidatorService
 };

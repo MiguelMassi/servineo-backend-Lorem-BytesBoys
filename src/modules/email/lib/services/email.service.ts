@@ -1,6 +1,6 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
-import { emailConfig } from './config/email.config';
+import { emailConfig } from '../../config/email.config';
 import { EmailValidatorService } from './email-validator.service';
 import { EmailOptions, SendEmailResponse } from '../types/email.types';
 

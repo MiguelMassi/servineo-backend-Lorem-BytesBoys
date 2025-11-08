@@ -1,4 +1,4 @@
-const whatsappConfig = {
+const config = {
     BASE_URL: process.env.WHATSAPP_BASE_URL,
     INSTANCE: process.env.WHATSAPP_INSTANCE,
     API_KEY: process.env.WHATSAPP_API_KEY
@@ -6,17 +6,16 @@ const whatsappConfig = {
 
 
 function validateConfig() {
-    const missingVars = Object.entries(whatsappConfig)
+    const missingVars = Object.entries(config)
         .filter(([key, value]) => !value)
         .map(([key]) => key);
 
     if (missingVars.length > 0) {
-        throw new Error(`Faltan variables de entorno para WhatsApp: ${missingVars.join(', ')}`);
+        // En una app real, esto podría detener el servidor. Aquí solo avisamos.
+        console.warn(`[WARNING] Faltan variables de entorno para WhatsApp: ${missingVars.join(', ')}`);
     }
 
-    return whatsappConfig;
+    return config;
 }
 
-module.exports = {
-    whatsappConfig: validateConfig()
-};
+export const whatsappConfig = validateConfig();

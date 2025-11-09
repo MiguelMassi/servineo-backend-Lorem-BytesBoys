@@ -1,37 +1,37 @@
+import { whatsappConfig } from '../../config/whatsapp.config.js';
+
 class WhatsAppValidatorService {
-  constructor() {
-    this.config = this.loadConfig();
+  /**
+   * Inicializa el servicio con la configuración.
+   * @param {Object} config - Configuración de WhatsApp.
+   */
+  constructor(config = whatsappConfig) {
+    this.config = config;
   }
 
   /**
-   * Carga la configuración desde variables de entorno
+   * Normaliza un número de teléfono (remueve espacios, etc.)
+   * @param {string} number - Número a normalizar.
+   * @returns {string} Número normalizado.
    */
-  loadConfig() {
-    const config = {
-      BASE_URL: process.env.WHATSAPP_BASE_URL,
-      INSTANCE: process.env.WHATSAPP_INSTANCE,
-      API_KEY: process.env.WHATSAPP_API_KEY
-    };
-
-    // Validar que todas las variables estén presentes
-    const missingVars = Object.entries(config)
-      .filter(([key, value]) => !value)
-      .map(([key]) => key);
-
-    if (missingVars.length > 0) {
-      throw new Error(`Faltan variables de entorno: ${missingVars.join(', ')}`);
-    }
-
-    return config;
+  normalizeNumber(number) {
+    // Remover espacios, guiones, paréntesis, etc.
+    return String(number).replace(/[\s\-\(\)]/g, '');
   }
 
-
+  /**
+   * Valida si un array de números existe en WhatsApp.
+   * @param {string[]} numbers - Array de números a validar.
+   * @returns {Promise<Object[]>} Un array con los resultados de la validación.
+   */
   async validateNumbers(numbers) {
     if (!Array.isArray(numbers) || numbers.length === 0) {
       throw new Error("Se requiere un array de números válido");
     }
 
-    const url = `${this.config.BASE_URL.replace(/\/+$/, '')}/chat/whatsappNumbers/${this.config.INSTANCE}`;
+    // Aseguramos que la URL termina con '/' para concatenar correctamente
+    const baseUrl = this.config.BASE_URL.replace(/\/+$/, '');
+    const url = `${baseUrl}/chat/whatsappNumbers/${this.config.INSTANCE}`;
 
     const requestBody = {
       numbers: numbers.map(number => this.normalizeNumber(number))
@@ -49,7 +49,7 @@ class WhatsAppValidatorService {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "Error desconocido");
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: Error de API de validación: ${errorText}`);
       }
 
       return await response.json();
@@ -59,24 +59,23 @@ class WhatsAppValidatorService {
     }
   }
 
-
+  /**
+   * Valida un solo número de teléfono.
+   * @param {string} number - Número a validar.
+   * @returns {Promise<Object>} Objeto con el estado de validez (`isValid`).
+   */
   async validateSingleNumber(number) {
     const result = await this.validateNumbers([number]);
 
+    // La API de Evolution devuelve un array. Tomamos el primer elemento.
     const numberData = result[0];
 
     return {
       number,
-      isValid: numberData.exists === true,  // Verificams explícitamente el campo 'exists'
+      isValid: numberData && numberData.exists === true, // Verificamos que el número exista
       details: numberData
     };
   }
-
-
-  normalizeNumber(number) {
-    // Remover espacios, guiones, paréntesis, etc.
-    return number.replace(/[\s\-\(\)]/g, '');
-  }
 }
 
-module.exports = WhatsAppValidatorService;
+export default WhatsAppValidatorService;

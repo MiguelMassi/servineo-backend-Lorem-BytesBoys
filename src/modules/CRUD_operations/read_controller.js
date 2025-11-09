@@ -1,4 +1,3 @@
-// read_controller.js
 import 'express';
 import {
   get_all_requester_schedules_by_fixer_month,
@@ -13,10 +12,13 @@ import {
   get_appointments_by_fixer_id_date
 } from './read_service.js'; // llamamos al service
 
+// Se eliminó la palabra clave 'export' de todas las funciones
+// y se agregó un bloque de exportación al final.
+
 // Obtener horarios de un requester en un mes específico
 // TODO: fix, controladores deben devolver siempre status codes, dataExists no debe existir
 // * FIXED Endpoint Chamo: -
-export async function getRequesterSchedulesByFixerMonth(req, res) {
+async function getRequesterSchedulesByFixerMonth(req, res) {
   try {
     const { fixer_id, requester_id, month } = req.query;
     if (!fixer_id) {
@@ -40,7 +42,7 @@ export async function getRequesterSchedulesByFixerMonth(req, res) {
 }
 
 // TODO: fix, controladores deben devolver siempre status codes, dataExists no debe existir
-export async function getAllRequesterSchedulesByFixerMonth(req, res) {
+async function getAllRequesterSchedulesByFixerMonth(req, res) {
   try {
     const { fixer_id, requester_id, month } = req.query;
     if (!fixer_id) {
@@ -66,7 +68,7 @@ export async function getAllRequesterSchedulesByFixerMonth(req, res) {
 // * Fixed Endpoint Arrick: Devolvia mucho 404.
 // * Anteriores 2 endpoints unificados: se obtienen todas las citas de un dia 
 // ? Inclue a todas las citas de todos los requesters en el dia
-export async function getAppointmentsByDate(req, res) {
+async function getAppointmentsByDate(req, res) {
   try {
     const { id_fixer, selected_date } = req.query;
     if (!id_fixer || !selected_date) {
@@ -91,7 +93,7 @@ export async function getAppointmentsByDate(req, res) {
 }
 
 //TODO: Fixear Endpoint Arrick: Unificar con el endpoint de arriba.
-export async function getAllRequesterSchedulesByFixerDay(req, res) {
+async function getAllRequesterSchedulesByFixerDay(req, res) {
   try {
     const { fixer_id, requester_id, searched_date } = req.query;
 
@@ -116,7 +118,7 @@ export async function getAllRequesterSchedulesByFixerDay(req, res) {
 }
 
 // * Fixed Endpoint Pichon: -
-export async function getModalFormAppointment(req, res) {
+async function getModalFormAppointment(req, res) {
   try {
     const { fixer_id, requester_id, appointment_date, start_hour } = req.query;
     console.log(req.query);
@@ -157,7 +159,7 @@ export async function getModalFormAppointment(req, res) {
 }
 
 // * Fixed Endpoint Mateo: Reemplazar Body por query y verificar que funcione correctamente.
-export async function getMeetingStatus(req, res) {
+async function getMeetingStatus(req, res) {
   try {
     const { id_requester, id_fixer, selected_date, starting_time } = req.query;
     console.log(req.query);
@@ -173,7 +175,7 @@ export async function getMeetingStatus(req, res) {
 }
 
 // * Endpoints de rati ratone que no dice nada de lo que necesita...
-export async function getRequesterSchedulesByFixerDay(req, res) {
+async function getRequesterSchedulesByFixerDay(req, res) {
   try {
     const { fixer_id, requester_id, searched_date } = req.query;
     if (!fixer_id || !requester_id || !searched_date) {
@@ -188,7 +190,7 @@ export async function getRequesterSchedulesByFixerDay(req, res) {
 }
 
 // * Endpoints de rati ratone que no dice nada de lo que necesita...
-export async function getOtherRequesterSchedulesByFixerDay(req, res) {
+async function getOtherRequesterSchedulesByFixerDay(req, res) {
   try {
     const { fixer_id, requester_id, searched_date } = req.query;
     if (!fixer_id || !requester_id || !searched_date) {
@@ -202,7 +204,7 @@ export async function getOtherRequesterSchedulesByFixerDay(req, res) {
   }
 }
 
-export async function getAppointmentByFixerIdHour(req, res) {
+async function getAppointmentByFixerIdHour(req, res) {
   try {
     const { fixer_id, date, hour } = req.query;
     if (!fixer_id || !date || !hour) {
@@ -226,7 +228,7 @@ export async function getAppointmentByFixerIdHour(req, res) {
   }
 }
 
-export async function getFixerAvailability(req, res) {
+async function getFixerAvailability(req, res) {
   const { fixer_id } = req.query;
   if (!fixer_id) {
     return res.status(400).json({ message: 'Missing parameter: required fixer_id' });
@@ -239,7 +241,7 @@ export async function getFixerAvailability(req, res) {
   }
 }
 
-export async function getAppointmentsByFixerIdAndDate(req, res) {
+async function getAppointmentsByFixerIdAndDate(req, res) {
   try {
     const { id_fixer, date } = req.query;
     if (!id_fixer || !date) {
@@ -262,3 +264,18 @@ export async function getAppointmentsByFixerIdAndDate(req, res) {
     });
   }
 }
+
+// Bloque de exportación final AÑADIDO para resolver el error de módulo no encontrado
+export {
+  getRequesterSchedulesByFixerMonth,
+  getAllRequesterSchedulesByFixerMonth,
+  getAppointmentsByDate,
+  getAllRequesterSchedulesByFixerDay,
+  getModalFormAppointment,
+  getMeetingStatus,
+  getRequesterSchedulesByFixerDay,
+  getOtherRequesterSchedulesByFixerDay,
+  getAppointmentByFixerIdHour,
+  getFixerAvailability,
+  getAppointmentsByFixerIdAndDate
+};

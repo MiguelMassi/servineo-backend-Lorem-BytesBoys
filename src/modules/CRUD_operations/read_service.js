@@ -300,6 +300,51 @@ export async function get_appointments_by_fixer_id_date(fixer_id, date) {
     throw new Error(error.message);
   }
 }
+//base de datos para obtener el email de un usuario por su user_id
+async function get_user_email_by_id(user_id) {
+  try {
+    await set_db_connection();
+    // Acceder directamente a la conexión nativa de MongoDB
+    const db = mongoose.connection.db;
+
+    // Buscar el usuario en la colección 'users' por su ObjectId
+    const user = await db.collection('users').findOne(
+      { _id: new mongoose.Types.ObjectId(user_id) },
+      { projection: { email: 1, _id: 0 } } // Solo proyectar el campo 'email'
+    );
+
+    if (!user || !user.email) {
+      throw new Error("User not found or email field is missing.");
+    }
+
+    return { email: user.email };
+  } catch (err) {
+    throw new Error(err.message);
+  }
+}
+
+
+async function get_user_name_by_id(user_id) {
+  try {
+    await set_db_connection();
+    // Acceder directamente a la conexión nativa de MongoDB
+    const db = mongoose.connection.db;
+
+    // Buscar el usuario en la colección 'users' por su ObjectId
+    const user = await db.collection('users').findOne(
+      { _id: new mongoose.Types.ObjectId(user_id) },
+      { projection: { name: 1, _id: 0 } } // Solo proyectar el campo 'name'
+    );
+
+    if (!user || !user.name) {
+      throw new Error("User not found or name field is missing.");
+    }
+
+    return { name: user.name };
+  } catch (err) {
+    throw new Error(err.message);
+  }
+}
 
 export {
   get_all_requester_schedules_by_fixer_month,
@@ -310,5 +355,7 @@ export {
   get_requester_schedules_by_fixer_day,
   get_other_requester_schedules_by_fixer_day,
   get_appointment_by_fixer_id_hour,
-  get_fixer_availability
+  get_fixer_availability,
+  get_user_email_by_id,//llamada a la funcion para obtener el email por user_id
+  get_user_name_by_id
 };

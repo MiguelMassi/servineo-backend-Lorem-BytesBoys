@@ -1,5 +1,6 @@
-// read_controller.js
+/// read_controller.js
 import 'express';
+// Se eliminó la importación duplicada de get_user_email_by_id aquí.
 import {
   get_all_requester_schedules_by_fixer_month,
   get_requester_schedules_by_fixer_month,
@@ -10,7 +11,9 @@ import {
   get_other_requester_schedules_by_fixer_day,
   get_appointment_by_fixer_id_hour,
   get_fixer_availability,
-  get_appointments_by_fixer_id_date
+  get_appointments_by_fixer_id_date,
+  get_user_email_by_id, // Se asegura la importación del nuevo servicio
+  get_user_name_by_id
 } from './read_service.js'; // llamamos al service
 
 // Obtener horarios de un requester en un mes específico
@@ -239,6 +242,58 @@ export async function getFixerAvailability(req, res) {
   }
 }
 
+
+/////base de datos usuario email por id/////
+export async function getUserEmail(req, res) {
+  try {
+    const { id } = req.query; // Obtener el ID del query string
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Falta el user ID.' });
+    }
+
+    const { email } = await get_user_email_by_id(id);
+
+    return res.status(200).json({
+      success: true,
+      email: email
+    });
+  } catch (err) {
+    // Es importante devolver un status 404 si el usuario no existe para ser más específico
+    if (err.message.includes("User not found")) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado.' });
+    }
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+//////fin base de datos usuario email por id/////
+
+
+export async function getUserName(req, res) {
+  try {
+    const { id } = req.query; // Obtener el ID del query string
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Falta el user ID.' });
+    }
+
+    const { name } = await get_user_name_by_id(id);
+
+    return res.status(200).json({
+      success: true,
+      name: name
+    });
+  } catch (err) {
+    // Es importante devolver un status 404 si el usuario no existe para ser más específico
+    if (err.message.includes("User not found")) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado.' });
+    }
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+
+
 export async function getAppointmentsByFixerIdAndDate(req, res) {
   try {
     const { id_fixer, date } = req.query;
@@ -262,3 +317,6 @@ export async function getAppointmentsByFixerIdAndDate(req, res) {
     });
   }
 }
+
+// La exportación final debe incluir todas las funciones que necesita read_routes.js
+// Esto estaba faltando o incompleto, causando el error de SyntaxErr

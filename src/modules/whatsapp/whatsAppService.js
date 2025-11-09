@@ -1,8 +1,8 @@
-const WhatsAppValidatorService = require('./whatsAppValidatorService');
-const { whatsappConfig } = require('../../config/whatsapp.config');
+import WhatsAppValidatorService from './whatsAppValidatorService.js';
+import { whatsappConfig } from '../../config/whatsapp.config.js';
 
 /**
- * Servicio principal para enviar mensajes de WhatsApp
+ * Servicio principal para enviar mensajes de WhatsApp (usando la Evolution API o similar)
  */
 class WhatsAppService {
   constructor(config = whatsappConfig) {
@@ -11,19 +11,30 @@ class WhatsAppService {
   }
 
   /**
-   * Envía un mensaje de texto a un número
-   * @param {string} number - Número destino
-   * @param {string} text - Texto del mensaje
-   * @param {Object} options - Opciones adicionales
-   * @returns {Promise<Object>} Resultado del envío
+   * Normaliza el formato del número.
+   * @param {string} number - Número a normalizar.
+   * @returns {string} Número normalizado.
+   */
+  normalizeNumber(number) {
+    return String(number).replace(/[\s\-\(\)]/g, '');
+  }
+
+  /**
+   * Envía un mensaje de texto a un número sin validación previa.
+   * @param {string} number - Número destino.
+   * @param {string} text - Texto del mensaje.
+   * @param {Object} options - Opciones adicionales (ej. custom_id, delay, etc.).
+   * @returns {Promise<Object>} Resultado del envío.
    */
   async sendText(number, text, options = {}) {
     if (!number || !text) {
       throw new Error("Número y texto son requeridos");
     }
 
-    const url = `${this.config.BASE_URL.replace(/\/+$/, '')}/message/sendText/${this.config.INSTANCE}`;
-    
+    // Aseguramos que la URL termina con '/' para concatenar correctamente
+    const baseUrl = this.config.BASE_URL.replace(/\/+$/, '');
+    const url = `${baseUrl}/message/sendText/${this.config.INSTANCE}`;
+
     const requestBody = {
       number: this.normalizeNumber(number),
       text,
@@ -42,7 +53,7 @@ class WhatsAppService {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "Error desconocido");
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: Error de API de envío: ${errorText}`);
       }
 
       return await response.json();
@@ -53,71 +64,53 @@ class WhatsAppService {
   }
 
   /**
-   * Envía un mensaje con verificación previa
-   * @param {string} number - Número destino
-   * @param {string} text - Texto del mensaje
-   * @param {Object} options - Opciones adicionales
-   * @returns {Promise<Object>} Resultado del envío
+   * Envía un mensaje con verificación de validez de número previa.
+   * @param {string} number - Número destino.
+   * @param {string} text - Texto del mensaje.
+   * @param {Object} options - Opciones adicionales.
+   * @returns {Promise<Object>} Resultado del envío.
    */
   async sendTextWithValidation(number, text, options = {}) {
     try {
-      // Primero validamos el número CON LA VERSIÓN CORREGIDA
+      // 1. Validamos el número
       const validation = await this.validator.validateSingleNumber(number);
-      
+
       if (!validation.isValid) {
-        throw new Error(`El número ${number} no es válido en WhatsApp`);
+        throw new Error(`El número ${number} no es un contacto válido de WhatsApp`);
       }
 
-      // Si es válido, enviamos el mensaje
+      // 2. Si es válido, enviamos el mensaje
       return await this.sendText(number, text, options);
     } catch (error) {
+      // Re-lanzamos el error para que el controlador lo capture
       console.error("Error en envío con validación:", error);
       throw error;
     }
   }
 
   /**
-   * Envía mensajes a múltiples números
-   * @param {string[]} numbers - Array de números
-   * @param {string} text - Texto del mensaje
-   * @param {Object} options - Opciones adicionales
-   * @returns {Promise<Object[]>} Resultados de los envíos
+   * Envía mensajes a múltiples números de manera asíncrona.
+   * @param {string[]} numbers - Array de números.
+   * @param {string} text - Texto del mensaje.
+   * @param {Object} options - Opciones adicionales.
+   * @returns {Promise<Object[]>} Resultados de los envíos (éxito o error para cada uno).
    */
   async sendBulkText(numbers, text, options = {}) {
     if (!Array.isArray(numbers) || numbers.length === 0) {
       throw new Error("Se requiere un array de números válido");
     }
 
-    const results = [];
-
-    for (const number of numbers) {
+    const promises = numbers.map(async (number) => {
       try {
         const result = await this.sendText(number, text, options);
-        results.push({
-          number,
-          success: true,
-          data: result
-        });
+        return { number, success: true, data: result };
       } catch (error) {
-        results.push({
-          number,
-          success: false,
-          error: error.message
-        });
+        return { number, success: false, error: error.message };
       }
-    }
+    });
 
-    return results;
-  }
-
-  /**
-   * Normaliza el formato del número
-   * @param {string} number - Número a normalizar
-   * @returns {string} Número normalizado
-   */
-  normalizeNumber(number) {
-    return number.replace(/[\s\-\(\)]/g, '');
+    return Promise.all(promises);
   }
 }
 
-module.exports = WhatsAppService;
+export default WhatsAppService;

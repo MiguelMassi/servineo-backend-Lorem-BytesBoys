@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { getUserEmail } from './read_controller.js';
+import { getUserName } from './read_controller.js';
 import {
   getRequesterSchedulesByFixerMonth,
   getAllRequesterSchedulesByFixerMonth,
@@ -41,5 +43,10 @@ router.get('/appointments/get_appointment_by_fixer_hour', getAppointmentByFixerI
 router.get('/appointments/get_all_appointments_by_fixer_date', getAppointmentsByFixerIdAndDate);
 
 router.get('/appointments/get_fixer_availability', getFixerAvailability);
+
+////email added
+router.get('/user/get_email', getUserEmail);
+
+router.get('/user/get_name', getUserName);
 
 export default router;

@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
 import db_connection from '../../database.js';
 import Appointment from '../../models/Appointment.js';
-import Notification from '../../models/Notifications.js'; // Usando 'Notifications.js'
+import Notification from '../../models/Notifications.js'; //Uso de 'Notifications.js'
 import mongoose from 'mongoose';
 
 dotenv.config();
@@ -69,7 +69,7 @@ async function create_appointment(current_appointment) {
 async function create_notification(notification_data) {
   try {
     await set_db_connection();
-    // CORRECCIÓN: Se elimina el 'new' duplicado.
+    // La instanciación del modelo debe ser 'new Notification(...)'
     const new_notification = new Notification(notification_data);
     await new_notification.save();
     return true;
@@ -86,20 +86,21 @@ async function get_fixer_details(fixer_id) {
     const db = mongoose.connection.db;
     const formated_id_fixer = new mongoose.Types.ObjectId(fixer_id);
 
-    // Se mantiene la búsqueda de 'whatsapp' que te funcionó
+    // MODIFICADO: Proyectamos 'whatsapp' y 'email'
     const fixer = await db.collection('users').findOne(
       { _id: formated_id_fixer },
-      { projection: { name: 1, whatsapp: 1, _id: 0 } }
+      { projection: { name: 1, whatsapp: 1, email: 1, _id: 0 } }
     );
 
     if (!fixer) {
       throw new Error("Fixer details not found in users collection.");
     }
 
-    // Retornamos 'fixer.whatsapp'
+    // Retornamos el email y el whatsapp
     return {
       fixer_name: fixer.name || 'Fixer',
-      fixer_phone: fixer.whatsapp || ''
+      fixer_phone: fixer.whatsapp || '',
+      fixer_email: fixer.email || null
     };
 
   } catch (err) {

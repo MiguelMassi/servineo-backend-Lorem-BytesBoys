@@ -77,17 +77,20 @@ export async function createAppointment(req, res) {
 
       // 2. Construir el mensaje de la plantilla para el FIXER
       const message =
-        `📅 NUEVA CITA AGENDADA
-Hola ${fixerDetails.fixer_name},
-Tienes un nuevo servicio:
-Cliente: ${requesterName}
-Fecha: ${appointmentDate}
-Hora: ${appointmentTime}
-Modalidad: ${appointment.appointment_type === 'presential' ? 'Presencial' : 'Virtual'}
-Servicio solicitado: ${appointment.appointment_description || 'Sin descripción'}
-Ubicación: ${location}
-Por favor, revisa mas detalles en la app.
-¡Gracias por ser parte de Servineo!`;
+        `*📅 NUEVA CITA AGENDADA*
+      Hola *${fixerDetails.fixer_name}*,
+
+      Tienes un nuevo servicio:
+
+      *Cliente:* ${requesterName}
+      *Fecha:* ${appointmentDate}
+      *Hora:* ${appointmentTime}
+      *Modalidad:* ${appointment.appointment_type === 'presential' ? 'Presencial' : 'Virtual'}
+      *Servicio solicitado:* ${appointment.appointment_description || 'Sin descripción'}
+      *Ubicación:* ${location}
+
+      Por favor, revisa mas detalles en la app.
+      ¡Gracias por ser parte de Servineo!`;
 
       let notificationStatus = 'PENDING';
       let errorDetails = null;

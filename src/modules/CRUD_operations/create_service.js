@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
 import db_connection from '../../database.js';
 import Appointment from '../../models/Appointment.js';
+import Notification from '../../models/Notifications.js'; // Usando 'Notifications.js'
 import mongoose from 'mongoose';
 
 dotenv.config();
@@ -55,15 +56,60 @@ async function create_appointment(current_appointment) {
     if (!exists || (exists && exists.cancelled_fixer)) {
       appointment = new Appointment(current_appointment);
       await appointment.save();
-      return { result: true, message_state: 'Cita creada correctamente.' };
+      return { result: appointment, message_state: 'Cita creada correctamente.' };
     } else {
-      return { result: true, message_state: 'No se puede crear la cita, la cita ya existe.' };
+      return { result: false, message_state: 'No se puede crear la cita, la cita ya existe.' };
     }
   } catch (err) {
     throw new Error('Error creating appointment: ' + err.message);
   }
 }
 
+// Función para guardar el registro de notificación
+async function create_notification(notification_data) {
+  try {
+    await set_db_connection();
+    // CORRECCIÓN: Se elimina el 'new' duplicado.
+    const new_notification = new Notification(notification_data);
+    await new_notification.save();
+    return true;
+  } catch (err) {
+    console.error('Error saving notification record:', err.message);
+    return false;
+  }
+}
+
+// Función para obtener datos del Fixer
+async function get_fixer_details(fixer_id) {
+  try {
+    await set_db_connection();
+    const db = mongoose.connection.db;
+    const formated_id_fixer = new mongoose.Types.ObjectId(fixer_id);
+
+    // Se mantiene la búsqueda de 'whatsapp' que te funcionó
+    const fixer = await db.collection('users').findOne(
+      { _id: formated_id_fixer },
+      { projection: { name: 1, whatsapp: 1, _id: 0 } }
+    );
+
+    if (!fixer) {
+      throw new Error("Fixer details not found in users collection.");
+    }
+
+    // Retornamos 'fixer.whatsapp'
+    return {
+      fixer_name: fixer.name || 'Fixer',
+      fixer_phone: fixer.whatsapp || ''
+    };
+
+  } catch (err) {
+    console.error('Error fetching fixer details:', err.message);
+    throw new Error('No se pudo obtener el Fixer para notificación.');
+  }
+}
+
 export {
   create_appointment,
+  create_notification,
+  get_fixer_details,
 };

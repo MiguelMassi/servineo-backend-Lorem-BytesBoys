@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
 import db_connection from '../../database.js';
 import Appointment from '../../models/Appointment.js';
-import Notification from '../../models/Notifications.js'; // AÑADIDO
+import Notification from '../../models/Notifications.js';
 import mongoose from 'mongoose';
 
 dotenv.config();
@@ -15,11 +15,7 @@ async function set_db_connection() {
   }
 }
 
-//Citas
-// * Mantener endpoint Vale (revisar si existen fallas con el nuevo esquema de la db).
-// * Existian incompatibilidades con el esquema modificado
-// ? Asuntos modificados: Ya no se actualizan appointments existentes.
-// ? Si ya existe un appointment con el mismo fixer, fecha y hora, se rechaza la creacion.
+// Función para crear una nueva cita (incluida la cita reprogramada)
 async function create_appointment(current_appointment) {
   try {
     await set_db_connection();
@@ -29,48 +25,82 @@ async function create_appointment(current_appointment) {
     const time_starting = current_appointment.starting_time;
 
     const db = mongoose.connection.db
+    // Check if IDs are valid ObjectId before using new mongoose.Types.ObjectId
+    if (!mongoose.Types.ObjectId.isValid(fixer_id)) {
+        return { result: false, message_state: 'ID de Fixer inválido.' };
+    }
+    if (!mongoose.Types.ObjectId.isValid(requester_id)) {
+        return { result: false, message_state: 'ID de Requester inválido.' };
+    }
+    
     const formated_id_fixer = new mongoose.Types.ObjectId(fixer_id);
     const formated_id_requester = new mongoose.Types.ObjectId(requester_id);
 
+    // Fetch Requester details for validation and response
     const existingRequester = await db.collection('users').findOne({
       _id: formated_id_requester
-    });
+    }, { projection: { name: 1, _id: 0, role: 1 } }); 
+
     if (!existingRequester || existingRequester.role !== 'requester') {
       return { result: false, message_state: 'Requester no encontrado.' }
     }
 
+    // Fetch Fixer details (incluyendo whatsapp, whatsapp_number y email para notificaciones)
     const existingFixer = await db.collection('users').findOne({
       _id: formated_id_fixer
-    });
+    }, { projection: { name: 1, whatsapp: 1, whatsapp_number: 1, role: 1, _id: 0, email: 1 } }); 
+
     if (!existingFixer || existingFixer.role !== 'fixer') {
       return { result: false, message_state: 'Fixer no encontrado.' }
     }
 
     const exists = await Appointment.findOne({
       id_fixer: fixer_id,
-      id_requester: requester_id,
       selected_date: date_selected,
       starting_time: time_starting
     });
     console.log(exists);
     let appointment = null;
+    
+    const fixerDetailsToReturn = {
+        name: existingFixer.name,
+        fixer_phone: existingFixer.whatsapp_number || existingFixer.whatsapp || '', 
+        fixer_email: existingFixer.email
+    };
+
+    const requesterDetailsToReturn = existingRequester;
+
     if (!exists || (exists && exists.cancelled_fixer)) {
       appointment = new Appointment(current_appointment);
       await appointment.save();
-      // MODIFICADO: Devolver 'appointment' en lugar de 'true'
-      return { result: appointment, message_state: 'Cita creada correctamente.' };
-    } else if (exists && exists.schedule_state === 'cancelled') {
-      const id_appointmente_exists = exists._id;
-      current_appointment.schedule_state = 'booked';
-      current_appointment.reprogram_reason = '';
 
-      // MODIFICADO: Devolver el 'updatedAppointment' en lugar de 'true'
-      const updatedAppointment = await Appointment.findByIdAndUpdate(
-        id_appointmente_exists,
-        { $set: current_appointment },
-        { new: true }
-      );
-      return { result: updatedAppointment, message_state: 'Cita creada correctamente.' };
+      // Devolver detalles al controlador para la notificación
+      return { 
+        result: appointment, 
+        message_state: 'Cita creada correctamente.',
+        fixerDetails: fixerDetailsToReturn,
+        requesterDetails: requesterDetailsToReturn
+      };
+    } else if (exists && exists.schedule_state === 'cancelled') {
+        const id_appointmente_exists = exists._id;
+        current_appointment.schedule_state = 'booked';
+        // Clear reprogram_reason if not explicitly passed by frontend (e.g., in a reactivation)
+        if (!current_appointment.reprogram_reason) {
+            current_appointment.reprogram_reason = '';
+        }
+
+        const updatedAppointment = await Appointment.findByIdAndUpdate(
+          id_appointmente_exists,
+          { $set: current_appointment },
+          { new: true }
+        );
+        
+        return { 
+          result: updatedAppointment, 
+          message_state: 'Cita creada correctamente.',
+          fixerDetails: fixerDetailsToReturn,
+          requesterDetails: requesterDetailsToReturn
+        };
     } else {
       // MODIFICADO: Devolver 'false' ya que la cita existe y no se creó
       return { result: false, message_state: 'No se puede crear la cita, la cita ya existe.' };
@@ -79,8 +109,6 @@ async function create_appointment(current_appointment) {
     throw new Error('Error creating appointment: ' + err.message);
   }
 }
-
-// --- INICIO DE CÓDIGO AÑADIDO ---
 
 // Función para guardar el registro de notificación
 async function create_notification(notification_data) {
@@ -96,40 +124,7 @@ async function create_notification(notification_data) {
   }
 }
 
-// Función para obtener datos del Fixer
-async function get_fixer_details(fixer_id) {
-  try {
-    await set_db_connection();
-    const db = mongoose.connection.db;
-    const formated_id_fixer = new mongoose.Types.ObjectId(fixer_id);
-
-    // MODIFICADO: Proyectamos 'whatsapp' y 'email'
-    const fixer = await db.collection('users').findOne(
-      { _id: formated_id_fixer },
-      { projection: { name: 1, whatsapp: 1, email: 1, _id: 0 } }
-    );
-
-    if (!fixer) {
-      throw new Error("Fixer details not found in users collection.");
-    }
-
-    // Retornamos el email y el whatsapp
-    return {
-      fixer_name: fixer.name || 'Fixer',
-      fixer_phone: fixer.whatsapp || '',
-      fixer_email: fixer.email || null
-    };
-
-  } catch (err) {
-    console.error('Error fetching fixer details:', err.message);
-    throw new Error('No se pudo obtener el Fixer para notificación.');
-  }
-}
-// --- FIN DE CÓDIGO AÑADIDO ---
-
-
 export {
   create_appointment,
-  create_notification, // AÑADIDO
-  get_fixer_details,   // AÑADIDO
+  create_notification,
 };

@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
+    "dev": "tsx watch src/index.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
@@ -33,20 +33,25 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.20.0",
     "mongoose": "^8.19.1",
-    "morgan": "^1.10.1"
+    "morgan": "^1.10.1",
+    "next": "^16.0.1",
+    "nodemailer": "^7.0.10"
   },
   "devDependencies": {
     "@eslint/css": "^0.11.1",
     "@eslint/js": "^9.36.0",
     "@eslint/markdown": "^7.3.0",
+    "@types/nodemailer": "^7.0.3",
     "eslint": "^9.36.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "globals": "^16.4.0",
     "nodemon": "^3.1.10",
+    "open": "^10.2.0",
     "prettier": "^3.6.2",
     "ts-node-dev": "^2.0.0",
     "tsc-watch": "^7.2.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.45.0"
   }

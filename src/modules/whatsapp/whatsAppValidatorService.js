@@ -10,13 +10,28 @@ class WhatsAppValidatorService {
   }
 
   /**
-   * Normaliza un número de teléfono (remueve espacios, etc.)
+   * Normaliza el formato del número.
    * @param {string} number - Número a normalizar.
    * @returns {string} Número normalizado.
    */
   normalizeNumber(number) {
-    // Remover espacios, guiones, paréntesis, etc.
-    return String(number).replace(/[\s\-\(\)]/g, '');
+    // 1. Quitar todo lo que no sea un dígito
+    let normalized = String(number).replace(/\D/g, '');
+
+    // 2. Si es un número de Bolivia (8 dígitos) y empieza con 6 o 7,
+    //    le añadimos el código de país 591
+    if (normalized.length === 8 && (normalized.startsWith('6') || normalized.startsWith('7'))) {
+      normalized = '591' + normalized;
+    }
+
+    // 3. Añadir el sufijo de la API si no lo tiene
+    //    (La API de Evolution usualmente requiere @c.us)
+    if (!normalized.endsWith('@c.us')) {
+      normalized += '@c.us';
+    }
+
+    // Ahora devolverá "59173796540@c.us"
+    return normalized;
   }
 
   /**

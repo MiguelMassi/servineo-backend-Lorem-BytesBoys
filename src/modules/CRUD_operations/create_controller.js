@@ -68,6 +68,8 @@ export async function createAppointment(req, res) {
       // --- Datos Comunes para Mensajes ---
       const appointmentDate = new Date(appointment.selected_date).toLocaleDateString('es-ES', { timeZone: 'UTC' });
       const appointmentTime = new Date(appointment.starting_time).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+      const channelsSent = [];
+      const channelsFailed = [];
 
       const notificationPromises = [];
 
@@ -102,8 +104,11 @@ Por favor, revisa mas detalles en la app.
         try {
           await whatsappService.sendTextWithValidation(fixerPhone, fixerWhatsAppMessage);
           status = 'SUCCESS';
+          channelsSent.push('WhatsApp Fixer');      // <-- captura exitosa
         } catch (e) {
           errorDet = e.message;
+          channelsFailed.push('WhatsApp Fixer');    // <-- captura fallida
+
         } finally {
           await create_notification({
             appointment_id: appointment._id,
@@ -128,8 +133,10 @@ Por favor, revisa mas detalles en la app.
               text: fixerEmailBody
             });
             status = 'SUCCESS';
+            channelsSent.push('Email Fixer');
           } catch (e) {
             errorDet = e.message;
+            channelsFailed.push('Email Fixer');
           } finally {
             await create_notification({
               appointment_id: appointment._id,
@@ -225,9 +232,11 @@ ${detailsText}
         try {
           await whatsappService.sendTextWithValidation(requesterPhone, requesterWhatsAppMessage); // Mensaje actualizado
           status = 'SUCCESS';
+          channelsSent.push('WhatsApp Requester');  // <-- captura exitosa
           console.log(`Notificación de WhatsApp enviada a Requester ${appointment.current_requester_name}`);
         } catch (e) {
           errorDet = e.message;
+          channelsFailed.push('WhatsApp Requester'); // <-- captura fallida
           console.error('Error al enviar WhatsApp a Requester:', errorDet);
         } finally {
           await create_notification({
@@ -254,9 +263,11 @@ ${detailsText}
               html: requesterEmailBody_HTML // Usamos la plantilla HTML
             });
             status = 'SUCCESS';
+            channelsSent.push('Email Requester'); // <-- captura exitosa
             console.log(`Notificación de Email enviada a Requester ${appointment.current_requester_name}`);
           } catch (e) {
             errorDet = e.message;
+            channelsFailed.push('Email Requester');
             console.error('Error al enviar Email a Requester:', errorDet);
           } finally {
             await create_notification({
@@ -282,6 +293,8 @@ ${detailsText}
         success: true,
         message: 'Cita creada satisfactoriamente. (Notificaciones y registro procesados)',
         created: appointment,
+        channelsSent,  // Nuevas variables para el resumen
+        channelsFailed // Nuevas variables para el resumen
       });
     }
   } catch (err) {

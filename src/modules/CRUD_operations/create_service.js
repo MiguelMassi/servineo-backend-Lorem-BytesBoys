@@ -126,10 +126,38 @@ async function get_fixer_details(fixer_id) {
   }
 }
 // --- FIN DE CÓDIGO AÑADIDO ---
+// Función para obtener datos del Requester
+async function get_requester_details(requester_id) {
+  try {
+    await set_db_connection();
+    const db = mongoose.connection.db;
+    const formated_id_requester = new mongoose.Types.ObjectId(requester_id);
 
+    // Proyectamos 'email' (y 'name' por si acaso)
+    const requester = await db.collection('users').findOne(
+      { _id: formated_id_requester },
+      { projection: { name: 1, email: 1, _id: 0 } }
+    );
+
+    if (!requester) {
+      throw new Error("Requester details not found in users collection.");
+    }
+
+    // Retornamos el email del requester
+    return {
+      requester_name: requester.name || 'Cliente',
+      requester_email: requester.email || null
+    };
+
+  } catch (err) {
+    console.error('Error fetching requester details:', err.message);
+    throw new Error('No se pudo obtener el Requester para notificación.');
+  }
+}
 
 export {
   create_appointment,
   create_notification, // AÑADIDO
-  get_fixer_details,   // AÑADIDO
+  get_fixer_details,
+  get_requester_details  // AÑADIDO
 };

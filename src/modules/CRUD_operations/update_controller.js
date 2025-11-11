@@ -13,7 +13,7 @@ import {
     create_notification 
 } from './create_service.js'; 
 import { WhatsAppService } from '../whatsapp/index.js';
-import * as EmailModule from '../email/lib/services/email.service';
+import * as EmailModule from '../email/lib/services/email.service.js';
 
 const whatsappService = new WhatsAppService();
 const emailService = new EmailModule.EmailService();

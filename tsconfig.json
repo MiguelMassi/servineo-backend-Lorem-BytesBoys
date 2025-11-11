@@ -7,23 +7,15 @@
     "outDir": "./dist",
     "esModuleInterop": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowJs": true
   },
   "include": [
     "src/**/*.ts",
-    "src/modules/CRUD_operations/create_location.js",
-    "src/models/Location.js",
-    "src/database.js",
-    "src/modules/CRUD_operations/test.js",
-    "src/config/db/mongoClient.js",
-    "src/config/env.config.js",
-    "src/config/server.config.js",
-    "src/config/server.routes.js",
-    "src/modules/location/location.controller.js",
-    "src/modules/location/location.routes.js",
-    "src/modules/location/location.service.js",
-    "src/database.d.js",
-    "src/index.js"
+    "src/**/*.js"
   ],
-  "exclude": ["node_modules", "**/*.spec.ts"]
+  "exclude": [
+    "node_modules",
+    "**/*.spec.ts"
+  ]
 }

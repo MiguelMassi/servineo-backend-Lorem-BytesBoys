@@ -1,178 +1,248 @@
 import 'express';
 import {
   create_appointment,
-  create_notification,
-  get_fixer_details,
-  get_requester_details // MODIFICADO: Importar la nueva función
+  create_notification, // Servicio para registrar la notificación en DB
+  get_requester_details // Importamos la función de utilidad del servicio
 } from './create_service.js';
 
 import { WhatsAppService } from '../whatsapp/index.js';
 import * as EmailModule from '../email/lib/services/email.service';
 
+// Instanciamos los servicios para reuso
 const whatsappService = new WhatsAppService();
 const emailService = new EmailModule.EmailService();
 
-export async function createAppointment(req, res) {
-  try {
-    const appointmentData = req.body;
+// Helper para formatear fecha/hora al estilo local
+function formatLocalizedDateTime(isoString) {
+    if (!isoString) return '[No especificada]';
+    const date = new Date(isoString);
+    
+    // Usamos 'es-ES' y 'UTC' para mantener el valor de la hora guardado en DB
+    const formatted = date.toLocaleString('es-ES', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true, 
+        timeZone: 'UTC' 
+    });
+    
+    // Capitaliza la primera letra y adapta el formato si es necesario
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
 
-    if (!appointmentData || Object.keys(appointmentData).length === 0) {
-      return res.status(400).json({ success: false, message: 'Parametros insuficientes en el body.' });
+/**
+ * Intenta enviar una notificación (WhatsApp o Email) con reintentos y registra el intento en DB.
+ * Retorna { success: boolean, channel: string } para el rastreo en el controlador.
+ */
+async function sendNotificationWithRetry({ appointmentId, recipient, name, type, message, html, subject, maxRetries = 3 }) {
+    const recipientForLog = recipient || 'N/A';
+    const isWhatsApp = type === 'whatsapp';
+    
+    if (!recipient) {
+        await create_notification({
+            appointment_id: appointmentId,
+            recipient_phone: recipientForLog,
+            notification_type: type,
+            message_content: `Skipped: No ${type} recipient found.`,
+            send_status: 'FAILED',
+            error_details: `${name} does not have a ${type} address registered.`, 
+        });
+        return { success: false, channel: `${type} ${name}` };
     }
 
-    const { result: appointment, message_state } = await create_appointment(appointmentData);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        let status = 'PENDING';
+        let errorDetails = null;
+        let success = false;
+        const contentToLog = isWhatsApp ? message : (html || message);
 
-    console.log(appointment);
-    console.log(message_state);
+        try {
+            if (isWhatsApp) {
+                // Usamos sendText ya que la validación se maneja implícitamente o en el servicio.
+                await whatsappService.sendText(recipient, message); 
+            } else { // Email
+                 await emailService.sendEmail({
+                     to: recipient,
+                     subject: subject,
+                     text: html ? null : message, // Envía 'text' si no hay 'html'
+                     html: html // Envía 'html' si está presente
+                 });
+            }
+            status = 'SUCCESS';
+            success = true;
+            console.log(`Notificación de ${type} enviada a ${name} en intento ${attempt}.`);
+            
+        } catch (e) {
+            status = 'FAILED';
+            errorDetails = `Attempt ${attempt}: ${e.message}`; 
+            console.error(`Error al enviar ${type} (Intento ${attempt}):`, errorDetails);
+        }
 
-    if (!appointment) {
-      // ... (lógica de errores de la cita sin cambios) ...
-      if (message_state === 'Fixer no encontrado.') {
-        return res.status(400).json({
-          success: false,
-          message: 'No se pudo crear la cita correctamente, id de fixer no encontrado'
+        // Log el intento actual
+        await create_notification({
+            appointment_id: appointmentId,
+            recipient_phone: recipient,
+            notification_type: type,
+            message_content: (contentToLog || '').substring(0, 300) + '...', // Limitar el log del mensaje
+            send_status: status,
+            error_details: errorDetails,
         });
-      }
-      if (message_state === 'Requester no encontrado.') {
-        return res.status(400).json({
-          success: false,
-          message: 'No se pudo crear la cita correctamente, id de requester no encontrado'
-        });
-      }
-      return res.status(400).json({
-        success: false,
-        message: 'No se pudo crear la cita, la cita actual ya existe.',
-      });
-    } else {
-      // --- LÓGICA DE OBTENCIÓN DE DATOS (FIXER Y REQUESTER) ---
-      let fixerDetails;
-      let requesterDetails; // MODIFICADO: Variable para datos del requester
 
-      try {
-        // Obtener detalles del Fixer (como antes)
-        fixerDetails = await get_fixer_details(appointment.id_fixer);
+        if (success) {
+            return { success: true, channel: `${type} ${name}` };
+        }
 
-        // MODIFICADO: Obtener detalles del Requester (email)
-        requesterDetails = await get_requester_details(appointment.id_requester);
+        // Esperar antes del siguiente reintento
+        if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+    return { success: false, channel: `${type} ${name}` }; // Todos los reintentos fallaron
+}
 
-      } catch (err) {
-        console.error(`Error crítico al obtener detalles de usuarios: ${err.message}`);
-        // La cita se creó, pero falló la notificación, así que respondemos con éxito
-        return res.status(200).json({
-          success: true,
-          message: 'Cita creada satisfactoriamente, pero falló la búsqueda de detalles para la notificación.',
-          created: appointment,
-        });
-      }
 
-      // --- Datos Comunes para Mensajes ---
-      const appointmentDate = new Date(appointment.selected_date).toLocaleDateString('es-ES', { timeZone: 'UTC' });
-      const appointmentTime = new Date(appointment.starting_time).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
-      const channelsSent = [];
-      const channelsFailed = [];
+export async function createAppointment(req, res) {
+    const channelsSent = [];
+    const channelsFailed = [];
 
-      const notificationPromises = [];
+    try {
+        const appointmentData = req.body;
 
-      // --- 1. Notificación al FIXER (Lógica existente - SIN CAMBIOS) ---
-      const fixerEmail = fixerDetails.fixer_email;
-      const fixerPhone = fixerDetails.fixer_phone;
+        if (!appointmentData || Object.keys(appointmentData).length === 0) {
+            return res.status(400).json({ success: false, message: 'Parametros insuficientes en el body.' });
+        }
 
-      const fixerLocation = appointment.display_name_location || (appointment.appointment_type === 'virtual' ? appointment.link_id : 'No especificada');
-      const fixerWhatsAppMessage =
-        `*📅 NUEVA CITA AGENDADA*
-Hola *${fixerDetails.fixer_name}*,
+        // Desestructurar resultado del servicio de creación (incluye details)
+        const { 
+            result: appointment, 
+            message_state, 
+            fixerDetails,
+            requesterDetails
+        } = await create_appointment(appointmentData);
+
+        if (!appointment) {
+            // Manejo de errores de negocio
+            return res.status(400).json({ success: false, message: message_state });
+        } else {
+            // --- LÓGICA DE DATOS Y NOTIFICACIÓN DUAL ---
+            
+            // Datos del FIXER
+            const fixerDetailsSafe = fixerDetails || {};
+            const fixerEmail = fixerDetailsSafe.email;
+            const fixerPhone = fixerDetailsSafe.whatsapp_number || ''; 
+            const fixerName = fixerDetailsSafe.fixer_name || 'Fixer';
+
+            // Datos del REQUESTER
+            const requesterDetailsSafe = requesterDetails || {};
+            const requesterName = appointment.current_requester_name || requesterDetailsSafe.requester_name;
+            const requesterPhone = appointment.current_requester_phone; // Teléfono viene del body/appointment
+            const requesterEmail = requesterDetailsSafe.email; // Email viene del DB/servicio
+
+            // Formato de fecha y ubicación
+            const newDateTimeFormatted = formatLocalizedDateTime(appointment.starting_time);
+            const location = appointment.display_name_location || (appointment.appointment_type === 'virtual' ? appointment.link_id : 'No especificada');
+
+            let fixerMessage;
+            let fixerEmailSubject;
+            const calendarLink = 'https://servineo.com/calendar'; 
+
+            // ** LÓGICA CONDICIONAL: REPROGRAMACIÓN vs. NUEVA CITA (Fixer) **
+            if (appointmentData.reprogram_reason) {
+                
+                const previousStartingTimeISO = appointmentData.past_date_iso; 
+                const previousDateTimeFormatted = formatLocalizedDateTime(previousStartingTimeISO);
+                
+                // Plantilla para REPROGRAMACIÓN (Funcionalidad Solicitada)
+                fixerMessage = 
+                    `*🔄 CITA REPROGRAMADA*
+
+Hola *${fixerName}*,
+
+Te informamos que el Requester *${requesterName}* ha reprogramado su cita agendada.
+
+Motivo: ${appointmentData.reprogram_reason}
+
+*Fecha anterior:* ${previousDateTimeFormatted}
+*Nueva fecha:* ${newDateTimeFormatted}
+*Servicio:* ${appointment.appointment_description || 'No especificado'}
+
+Por favor revisa tu calendario en la app para mantener tu disponibilidad actualizada.
+[Ver Calendario](${calendarLink})`;
+
+                fixerEmailSubject = `🔄 Cita Reprogramada por ${requesterName}`;
+            } else {
+                // Plantilla para NUEVA CITA AGENDADA (Lógica original)
+                fixerMessage =
+                    `*📅 NUEVA CITA AGENDADA*
+
+Hola *${fixerName}*,
 
 Tienes un nuevo servicio:
 
-*Cliente:* ${appointment.current_requester_name}
-*Fecha:* ${appointmentDate}
-*Hora:* ${appointmentTime}
+*Cliente:* ${requesterName}
+*Fecha y Hora:* ${newDateTimeFormatted}
 *Modalidad:* ${appointment.appointment_type === 'presential' ? 'Presencial' : 'Virtual'}
 *Servicio solicitado:* ${appointment.appointment_description || 'Sin descripción'}
-*Ubicación:* ${fixerLocation}
+*Ubicación:* ${location}
 
 Por favor, revisa mas detalles en la app.
 ¡Gracias por ser parte de Servineo!`;
 
-      const fixerEmailBody = fixerWhatsAppMessage.replace(/\*/g, '').trim();
-      const fixerEmailSubject = `📅 NUEVA CITA AGENDADA`;
+                fixerEmailSubject = `📅 NUEVA CITA AGENDADA`;
+            }
+            // ** FIN LÓGICA CONDICIONAL (Fixer) **
 
-      // 1.a. Envío WhatsApp al FIXER (SIN CAMBIOS)
-      notificationPromises.push((async () => {
-        let status = 'FAILED';
-        let errorDet = null;
-        try {
-          await whatsappService.sendTextWithValidation(fixerPhone, fixerWhatsAppMessage);
-          status = 'SUCCESS';
-          channelsSent.push('WhatsApp Fixer');      // <-- captura exitosa
-        } catch (e) {
-          errorDet = e.message;
-          channelsFailed.push('WhatsApp Fixer');    // <-- captura fallida
+            // 1. Cuerpo de Email para Fixer (sin Markdown)
+            const fixerEmailBody = fixerMessage.replace(/\*/g, '').replace(/(\n\s*\n)/g, '\n\n').trim();
 
-        } finally {
-          await create_notification({
-            appointment_id: appointment._id,
-            recipient_phone: fixerPhone || 'fixer_no_phone',
-            notification_type: 'whatsapp',
-            message_content: fixerWhatsAppMessage,
-            send_status: status,
-            error_details: errorDet,
-          });
-        }
-      })());
+            const notificationPromises = [];
 
-      // 1.b. Envío Email al FIXER (SIN CAMBIOS)
-      if (fixerEmail) {
-        notificationPromises.push((async () => {
-          let status = 'FAILED';
-          let errorDet = null;
-          try {
-            await emailService.sendEmail({
-              to: fixerEmail,
-              subject: fixerEmailSubject,
-              text: fixerEmailBody
-            });
-            status = 'SUCCESS';
-            channelsSent.push('Email Fixer');
-          } catch (e) {
-            errorDet = e.message;
-            channelsFailed.push('Email Fixer');
-          } finally {
-            await create_notification({
-              appointment_id: appointment._id,
-              recipient_phone: fixerEmail || fixerPhone || 'email_fixer_no_phone',
-              notification_type: 'email',
-              message_content: fixerEmailBody,
-              send_status: status,
-              error_details: errorDet,
-            });
-          }
-        })());
-      }
+            // --- A. Notificación al FIXER ---
+            
+            // 1. WhatsApp Fixer
+            notificationPromises.push(
+                sendNotificationWithRetry({
+                    appointmentId: appointment._id,
+                    recipient: fixerPhone, 
+                    name: 'Fixer',
+                    type: 'whatsapp',
+                    message: fixerMessage,
+                    subject: fixerEmailSubject
+                })
+            );
 
-      // --- 2. MODIFICADO: Notificación al REQUESTER (Cliente) ---
+            // 2. Email Fixer
+            notificationPromises.push(
+                sendNotificationWithRetry({
+                    appointmentId: appointment._id,
+                    recipient: fixerEmail,
+                    name: 'Fixer',
+                    type: 'email',
+                    message: fixerEmailBody, // Email usa la versión sin formato
+                    subject: fixerEmailSubject 
+                })
+            );
+            
+            // --- B. Notificación al REQUESTER (Cliente) ---
+            
+            // Plantillas para el REQUESTER
+            const modalityText = appointment.appointment_type === 'presential' ? 'Presencial' : 'Virtual';
+            const modalityDetails = appointment.appointment_type === 'presential'
+                ? `${appointment.display_name_location || 'Ubicación no especificada'}`
+                : `${appointment.link_id || 'Enlace no especificado'}`;
+            
+            // Adaptamos el formato de fecha 
+            const dateText = newDateTimeFormatted.replace(/el\s+/, '').replace(/\s+a\s+las/i, ' a las'); 
+            const detailsText = appointment.appointment_description || 'Sin descripción';
 
-      const requesterPhone = appointment.current_requester_phone;
-      const requesterEmail = requesterDetails.requester_email;
-
-      // --- INICIO DE MODIFICACIÓN ---
-
-      // Variables para el nuevo formato
-      const modalityText = appointment.appointment_type === 'presential' ? 'Presencial' : 'Virtual';
-      const modalityDetails = appointment.appointment_type === 'presential'
-        ? `${appointment.display_name_location || 'Ubicación no especificada'}`
-        : `${appointment.link_id || 'Enlace no especificado'}`;
-      const professionalName = fixerDetails.fixer_name;
-      const detailsText = appointment.appointment_description || 'Sin descripción';
-      const dateText = `${appointmentDate} a las ${appointmentTime}`;
-
-      // 1. Plantilla de WhatsApp (Con negritas)
-      //    Nota: WhatsApp no permite centrar el texto.
-      const requesterWhatsAppMessage =
-        `*✅ ¡Cita Agendada Exitosamente!*
+            // WhatsApp Requester
+            const requesterWhatsAppMessage =
+                `*✅ ¡Cita Agendada Exitosamente!*
 
 *Profesional asignado:*
-${professionalName}
+${fixerName}
 
 *Fecha y hora:*
 ${dateText}
@@ -187,120 +257,105 @@ ${detailsText}
 
 *Tu cita ha sido confirmada.*`;
 
-      // 2. Plantilla de Email (HTML con fondo gris y negritas)
-      const requesterEmailBody_HTML = `
-      <div style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 25px; border-radius: 8px; max-width: 600px; margin: auto; line-height: 1.6; color: #333;">
-        <h2 style="text-align: center; color: #333; margin-top: 0;">✅ ¡Cita Agendada Exitosamente!</h2>
-        
-        <p style="margin-bottom: 20px;">
-          <strong style="color: #000;">Profesional asignado:</strong><br>
-          ${professionalName}
-        </p>
-        
-        <p style="margin-bottom: 20px;">
-          <strong style="color: #000;">Fecha y hora:</strong><br>
-          ${dateText}
-        </p>
-        
-        <p style="margin-bottom: 20px;">
-          <strong style="color: #000;">Modalidad:</strong><br>
-          ${modalityText}<br>
-          <span style="color: #555; font-size: 0.9em;">${modalityDetails}</span>
-        </p>
-        
-        <p style="margin-bottom: 20px;">
-          <strong style="color: #000;">Detalles:</strong><br>
-          ${detailsText}
-        </p>
-        
-        <p style="color: #000; text-align: center; margin-top: 25px; margin-bottom: 0;">
-          <strong>Tu cita ha sido confirmada.</strong>
-        </p>
-      </div>
-      `;
-
-      // 3. Asunto para el Email
-      const requesterEmailSubject = `✅ ¡Cita Agendada Exitosamente!`;
-
-      // --- FIN DE MODIFICACIÓN ---
+            // Email HTML Requester
+            const requesterEmailBody_HTML = `
+            <div style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 25px; border-radius: 8px; max-width: 600px; margin: auto; line-height: 1.6; color: #333;">
+                <h2 style="text-align: center; color: #333; margin-top: 0;">✅ ¡Cita Agendada Exitosamente!</h2>
+                
+                <p style="margin-bottom: 20px;">
+                    <strong style="color: #000;">Profesional asignado:</strong><br>
+                    ${fixerName}
+                </p>
+                
+                <p style="margin-bottom: 20px;">
+                    <strong style="color: #000;">Fecha y hora:</strong><br>
+                    ${dateText}
+                </p>
+                
+                <p style="margin-bottom: 20px;">
+                    <strong style="color: #000;">Modalidad:</strong><br>
+                    ${modalityText}<br>
+                    <span style="color: #555; font-size: 0.9em;">${modalityDetails}</span>
+                </p>
+                
+                <p style="margin-bottom: 20px;">
+                    <strong style="color: #000;">Detalles:</strong><br>
+                    ${detailsText}
+                </p>
+                
+                <p style="color: #000; text-align: center; margin-top: 25px; margin-bottom: 0;">
+                    <strong>Tu cita ha sido confirmada.</strong>
+                </p>
+            </div>
+            `;
+            const requesterEmailSubject = `✅ ¡Cita Agendada Exitosamente!`;
 
 
-      // 2.a. Envío WhatsApp al REQUESTER
-      notificationPromises.push((async () => {
-        let status = 'FAILED';
-        let errorDet = null;
-        try {
-          await whatsappService.sendTextWithValidation(requesterPhone, requesterWhatsAppMessage); // Mensaje actualizado
-          status = 'SUCCESS';
-          channelsSent.push('WhatsApp Requester');  // <-- captura exitosa
-          console.log(`Notificación de WhatsApp enviada a Requester ${appointment.current_requester_name}`);
-        } catch (e) {
-          errorDet = e.message;
-          channelsFailed.push('WhatsApp Requester'); // <-- captura fallida
-          console.error('Error al enviar WhatsApp a Requester:', errorDet);
-        } finally {
-          await create_notification({
-            appointment_id: appointment._id,
-            recipient_phone: requesterPhone, // Teléfono del requester
-            notification_type: 'whatsapp',
-            message_content: requesterWhatsAppMessage, // Mensaje actualizado
-            send_status: status,
-            error_details: errorDet,
-          });
+            // 3. WhatsApp Requester
+            notificationPromises.push(
+                sendNotificationWithRetry({
+                    appointmentId: appointment._id,
+                    recipient: requesterPhone, 
+                    name: requesterName,
+                    type: 'whatsapp',
+                    message: requesterWhatsAppMessage,
+                    subject: requesterEmailSubject
+                })
+            );
+
+            // 4. Email Requester (Usando HTML)
+            notificationPromises.push(
+                sendNotificationWithRetry({
+                    appointmentId: appointment._id,
+                    recipient: requesterEmail,
+                    name: requesterName,
+                    type: 'email',
+                    message: requesterWhatsAppMessage.replace(/\*/g, '').trim(), // Versión texto simple para fallback
+                    html: requesterEmailBody_HTML, 
+                    subject: requesterEmailSubject
+                })
+            );
+
+
+            // Esperar a que todos los intentos de notificación y registro terminen
+            const rawResults = await Promise.all(notificationPromises);
+            
+            // Procesar los resultados para canales enviados/fallidos
+            rawResults.forEach(result => {
+                if(result && result.success) {
+                    channelsSent.push(result.channel);
+                } else if(result && result.channel) {
+                    channelsFailed.push(result.channel);
+                }
+            });
+
+            // Verificar si AL MENOS una notificación fue exitosa
+            const communicationSuccess = channelsSent.length > 0;
+
+            if (!communicationSuccess && appointmentData.reprogram_reason) {
+                // Error crítico si es reprogramación y TODAS las notificaciones fallaron.
+                return res.status(500).json({
+                    success: false,
+                    message: 'Cita creada/reprogramada, pero la notificación crítica (WhatsApp/Email) falló completamente. Revise los logs.',
+                    created: appointment,
+                    channelsSent,
+                    channelsFailed
+                });
+            }
+            
+            // Respuesta final de éxito (incluye channelsSent y channelsFailed)
+            return res.status(200).json({
+                success: true,
+                message: 'Cita creada satisfactoriamente. (Notificaciones y registro procesados)',
+                created: appointment,
+                channelsSent,  
+                channelsFailed 
+            });
         }
-      })());
-
-      // 2.b. Envío Email al REQUESTER (Modificado para usar HTML)
-      if (requesterEmail) {
-        notificationPromises.push((async () => {
-          let status = 'FAILED';
-          let errorDet = null;
-          try {
-            // MODIFICADO: Se envía 'html' en lugar de 'text'
-            await emailService.sendEmail({
-              to: requesterEmail,
-              subject: requesterEmailSubject,
-              html: requesterEmailBody_HTML // Usamos la plantilla HTML
-            });
-            status = 'SUCCESS';
-            channelsSent.push('Email Requester'); // <-- captura exitosa
-            console.log(`Notificación de Email enviada a Requester ${appointment.current_requester_name}`);
-          } catch (e) {
-            errorDet = e.message;
-            channelsFailed.push('Email Requester');
-            console.error('Error al enviar Email a Requester:', errorDet);
-          } finally {
-            await create_notification({
-              appointment_id: appointment._id,
-              recipient_phone: requesterEmail || requesterPhone || 'email_requester_no_phone',
-              notification_type: 'email',
-              message_content: requesterEmailBody_HTML, // Guardamos el HTML
-              send_status: status,
-              error_details: errorDet,
-            });
-          }
-        })());
-      } else {
-        console.warn(`No se encontró email para el Requester ${appointment.current_requester_name}. Se omite notificación por email.`);
-      }
-
-      // --- Fin de Modificaciones ---
-
-      // Esperar a que todos los 4 intentos de notificación terminen
-      await Promise.all(notificationPromises);
-
-      return res.status(200).json({
-        success: true,
-        message: 'Cita creada satisfactoriamente. (Notificaciones y registro procesados)',
-        created: appointment,
-        channelsSent,  // Nuevas variables para el resumen
-        channelsFailed // Nuevas variables para el resumen
-      });
+    } catch (err) {
+        console.error('Error en el controlador:', err);
+        return res
+            .status(500)
+            .json({ success: false, message: 'Error de servidor.', error: err.message });
     }
-  } catch (err) {
-    console.error('Error en el controlador:', err);
-    return res
-      .status(500)
-      .json({ success: false, message: 'Error de servidor.', error: err.message });
-  }
 }

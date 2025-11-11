@@ -13,7 +13,13 @@ const notificationSchema = new mongoose.Schema(
         },
         notification_type: {
             type: String,
-            enum: ['whatsapp', 'email', 'sms'],
+            enum: [
+                'whatsapp', 
+                'email', 
+                'sms', 
+                'cancellation_warning', // <--- AÑADIDO
+                'cancellation_warning_email_fallback' // <--- AÑADIDO
+            ],
             required: true,
             default: 'whatsapp',
         },

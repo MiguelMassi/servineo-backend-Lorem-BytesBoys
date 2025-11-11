@@ -46,12 +46,13 @@ async function fixer_cancell_appointment_by_id(appointment_id) {
     const result = await Appointment.findByIdAndUpdate(appointment_id, {
       cancelled_fixer: true
     }, {
-      new: true
+      new: true // <-- Devuelve el documento actualizado
     });
     if (!result) {
       throw new Error("Appointment no econtrado");
     }
-    return result;
+    // MODIFICADO: Devolver el objeto completo
+    return result; 
   } catch (error) {
     throw new Error(error.message);
   }
@@ -70,8 +71,37 @@ async function update_fixer_availability(fixer_id, availability) {
   }
 }
 
+// --- NUEVA FUNCIÓN AÑADIDA ---
+// Función para contar cancelaciones consecutivas (Criterios 1 y 5)
+async function get_consecutive_cancellation_count(fixer_id) {
+  await set_db_connection();
+  
+  // Buscamos las citas del fixer, ordenadas por 'updatedAt' descendente.
+  // 'updatedAt' refleja cuándo se realizó la acción de cancelar.
+  const fixer_appointments = await Appointment.find({ 
+    id_fixer: fixer_id 
+  })
+    .sort({ updatedAt: -1 })
+    .limit(20); // Limitamos la búsqueda a un historial reciente
+
+  let consecutive_cancellations = 0;
+
+  for (const appt of fixer_appointments) {
+    if (appt.cancelled_fixer === true) {
+      consecutive_cancellations++;
+    } else {
+      // La racha se rompe si encontramos una no cancelada
+      break; 
+    }
+  }
+  return consecutive_cancellations;
+}
+// --- FIN DE NUEVA FUNCIÓN ---
+
+
 export {
   update_appointment_by_id,
   update_fixer_availability,
-  fixer_cancell_appointment_by_id
+  fixer_cancell_appointment_by_id,
+  get_consecutive_cancellation_count // <-- Exportamos la nueva función
 };

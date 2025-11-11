@@ -1,10 +1,11 @@
 import Server from './config/server.config.js';
-import _connect from './database.js';
-
 import { SERVER_PORT } from './config/env.config.js';
+import { conectarMongo } from './config/mongo.config.js';
 
 async function startServer() {
   try {
+    await conectarMongo();
+    
     Server.listen(SERVER_PORT, () => {
       console.info(`Server running on http://localhost:${SERVER_PORT}`);
     });
@@ -13,5 +14,5 @@ async function startServer() {
   }
 }
 
-_connect();
 startServer();
+

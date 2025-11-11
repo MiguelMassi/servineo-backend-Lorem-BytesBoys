@@ -43,15 +43,27 @@ async function update_appointment_by_id(id, attributes) {
 async function fixer_cancell_appointment_by_id(appointment_id) {
   try {
     await set_db_connection();
-    const result = await Appointment.findByIdAndUpdate(appointment_id, {
+    
+    // 1. Encontrar la cita antes de modificarla
+    const existing = await Appointment.findById(appointment_id);
+    if (!existing) {
+      throw new Error("Appointment no encontrado");
+    }
+
+    // 2. Manejar el caso de cita ya cancelada (modified: false)
+    if (existing.cancelled_fixer === true) {
+        return { modified: false, existing };
+    }
+
+    // 3. Actualizar el campo cancelled_fixer
+    const updated = await Appointment.findByIdAndUpdate(appointment_id, {
       cancelled_fixer: true
     }, {
       new: true
     });
-    if (!result) {
-      throw new Error("Appointment no econtrado");
-    }
-    return result;
+    
+    // 4. Devolver el resultado de la modificación junto con el objeto de la cita
+    return { modified: true, existing: updated }; 
   } catch (error) {
     throw new Error(error.message);
   }

@@ -6,7 +6,7 @@ import {
 } from './create_service.js';
 
 import { WhatsAppService } from '../whatsapp/index.js';
-import * as EmailModule from '../email/lib/services/email.service.js';
+import * as EmailModule from '../email/lib/services/email.service';
 
 // Instanciamos los servicios para reuso
 const whatsappService = new WhatsAppService();

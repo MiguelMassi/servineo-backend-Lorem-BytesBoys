@@ -15,6 +15,9 @@ async function set_db_connection() {
   }
 }
 
+// Define el límite de cancelaciones consecutivas
+const CONSECUTIVE_CANCELLATION_LIMIT = 3;
+
 // * Fixed Endpoint Pichon: Refactorizar y probar en Postman.
 // * El endpoint estaba actualizando mas slots de los que deberia, ahora con el nuevo esquema actualiza lo solicitado.
 async function update_appointment_by_id(id, attributes) {
@@ -43,7 +46,7 @@ async function update_appointment_by_id(id, attributes) {
 async function fixer_cancell_appointment_by_id(appointment_id) {
   try {
     await set_db_connection();
-    
+
     // 1. Encontrar la cita antes de modificarla
     const existing = await Appointment.findById(appointment_id);
     if (!existing) {
@@ -52,7 +55,16 @@ async function fixer_cancell_appointment_by_id(appointment_id) {
 
     // 2. Manejar el caso de cita ya cancelada (modified: false)
     if (existing.cancelled_fixer === true) {
-        return { modified: false, existing };
+      // Aunque ya estaba cancelada, igual verificamos el conteo por si acaso
+      const { consecutiveCount } = await checkConsecutiveCancellations(existing.id_fixer);
+
+      return {
+        modified: false,
+        existing,
+        warning_trigger: consecutiveCount >= CONSECUTIVE_CANCELLATION_LIMIT,
+        cancellation_count: consecutiveCount,
+        last_cancellation_date: existing.updatedAt
+      };
     }
 
     // 3. Actualizar el campo cancelled_fixer
@@ -61,13 +73,51 @@ async function fixer_cancell_appointment_by_id(appointment_id) {
     }, {
       new: true
     });
-    
-    // 4. Devolver el resultado de la modificación junto con el objeto de la cita
-    return { modified: true, existing: updated }; 
+
+    // 4. Verificar el conteo de cancelaciones consecutivas
+    const { consecutiveCount } = await checkConsecutiveCancellations(updated.id_fixer);
+
+    // 5. Devolver el resultado de la modificación junto con los datos de advertencia
+    return {
+      modified: true,
+      existing: updated,
+      warning_trigger: consecutiveCount >= CONSECUTIVE_CANCELLATION_LIMIT,
+      cancellation_count: consecutiveCount,
+      last_cancellation_date: updated.updatedAt // Fecha de la cancelación actual
+    };
   } catch (error) {
     throw new Error(error.message);
   }
 }
+
+/**
+ * Función auxiliar para contar cancelaciones consecutivas de un fixer.
+ * Busca las citas más recientes y cuenta cuántas tienen 'cancelled_fixer: true'
+ * hasta que encuentra una que no esté cancelada.
+ */
+async function checkConsecutiveCancellations(fixer_id) {
+  await set_db_connection();
+
+  // 1. Buscar todas las citas del fixer, ordenadas por la más reciente (usando updatedAt)
+  const allAppointments = await Appointment.find({
+    id_fixer: fixer_id
+  }).sort({ updatedAt: -1 }); // La más reciente primero
+
+  let consecutiveCount = 0;
+
+  // 2. Iterar sobre las citas para contar las consecutivas
+  for (const app of allAppointments) {
+    if (app.cancelled_fixer === true) {
+      consecutiveCount++;
+    } else {
+      // Se encontró una cita NO cancelada, se rompe la racha.
+      break;
+    }
+  }
+
+  return { consecutiveCount };
+}
+
 
 async function update_fixer_availability(fixer_id, availability) {
   try {

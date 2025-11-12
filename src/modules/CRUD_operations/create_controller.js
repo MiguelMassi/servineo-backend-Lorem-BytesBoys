@@ -132,11 +132,11 @@ export async function createAppointment(req, res) {
             const fixerDetailsSafe = fixerDetails || {};
             const fixerEmail = fixerDetailsSafe.email;
             const fixerPhone = fixerDetailsSafe.whatsapp_number || ''; 
-            const fixerName = fixerDetailsSafe.fixer_name || 'Fixer';
+            const fixerName = fixerDetailsSafe.name || 'Fixer'; // <--- CORRECCIÓN: Usa .name
 
             // Datos del REQUESTER
             const requesterDetailsSafe = requesterDetails || {};
-            const requesterName = appointment.current_requester_name || requesterDetailsSafe.requester_name;
+            const requesterName = appointment.current_requester_name || requesterDetailsSafe.name;
             const requesterPhone = appointment.current_requester_phone; // Teléfono viene del body/appointment
             const requesterEmail = requesterDetailsSafe.email; // Email viene del DB/servicio
 
@@ -206,7 +206,7 @@ Por favor, revisa mas detalles en la app.
                 sendNotificationWithRetry({
                     appointmentId: appointment._id,
                     recipient: fixerPhone, 
-                    name: 'Fixer',
+                    name: fixerName, // <--- CORRECCIÓN: Usa el nombre real del Fixer aquí
                     type: 'whatsapp',
                     message: fixerMessage,
                     subject: fixerEmailSubject
@@ -218,7 +218,7 @@ Por favor, revisa mas detalles en la app.
                 sendNotificationWithRetry({
                     appointmentId: appointment._id,
                     recipient: fixerEmail,
-                    name: 'Fixer',
+                    name: fixerName, // <--- CORRECCIÓN: Usa el nombre real del Fixer aquí
                     type: 'email',
                     message: fixerEmailBody, // Email usa la versión sin formato
                     subject: fixerEmailSubject 

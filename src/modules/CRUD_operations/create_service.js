@@ -31,7 +31,8 @@ export async function create_appointment(current_appointment) {
     // 1. Fetch Requester details for validation and response
     const existingRequester = await db.collection('users').findOne({
       _id: formated_id_requester
-    }, { projection: { name: 1, _id: 0, role: 1, email: 1 } }); 
+    }, { projection: { name: 1, _id: 0, role: 1, email: 1, telefono: 1 } }); // Añadir telefono
+    
 
     if (!existingRequester || existingRequester.role !== 'requester') {
       return { result: false, message_state: 'Requester no encontrado.' }
@@ -81,13 +82,14 @@ export async function create_appointment(current_appointment) {
       result: appointment, 
       message_state: message_state,
       fixerDetails: {
-        name: existingFixer.name,
+        name: existingFixer.name, // Clave estandarizada a 'name'
         whatsapp_number: existingFixer.whatsapp_number || existingFixer.whatsapp || '', 
         email: existingFixer.email
       },
       requesterDetails: {
         name: existingRequester.name || current_appointment.current_requester_name,
-        email: existingRequester.email
+        email: existingRequester.email,
+        telefono: existingRequester.telefono // Añadir telefono
       }
     };
 
@@ -126,7 +128,7 @@ export async function get_fixer_details(fixer_id) {
     }
 
     return {
-      fixer_name: fixer.name || 'Fixer',
+      name: fixer.name || 'Fixer', // <-- Cambio clave: de 'fixer_name' a 'name'
       fixer_phone: fixer.whatsapp_number || fixer.whatsapp || '',
       fixer_email: fixer.email || null
     };
@@ -164,4 +166,3 @@ export async function get_requester_details(requester_id) {
     throw new Error('No se pudo obtener el Requester para notificación.');
   }
 }
-// NOTA: EL BLOQUE 'export { ... }' AL FINAL HA SIDO ELIMINADO PARA EVITAR DUPLICACIÓN.

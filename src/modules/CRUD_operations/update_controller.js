@@ -181,7 +181,7 @@ async function fixerCancellAppointment(req, res) {
         console.log(`\n[DEBUG] Objeto Completo del Requester:`, requesterDetails); 
         // ------------------------------------------------------------
 
-        const requesterName = requesterDetails.name || requesterDetails.requester_name;
+        const requesterName = requesterDetails.requester_name;
         
         // Extracción y formato del teléfono (usa el campo 'telefono')
         const rawPhone = requesterDetails.telefono || ''; 
@@ -189,7 +189,7 @@ async function fixerCancellAppointment(req, res) {
         let cleanPhone = '+' + digitsOnly; 
         
         const requesterEmail = requesterDetails.requester_email || ''; 
-        const fixerName = fixerDetails.fixer_name || 'Fixer';
+        const fixerName = fixerDetails.name || 'Fixer'; // <--- CORRECCIÓN APLICADA AQUÍ (de 'fixer_name' a 'name')
 
         // Formato de fecha y hora
         const appointmentStartISO = cancelledAppointment.starting_time; 

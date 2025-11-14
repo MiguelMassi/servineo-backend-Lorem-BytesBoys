@@ -47,6 +47,7 @@ async function create_appointment(current_appointment) {
 
     const exists = await Appointment.findOne({
       id_fixer: fixer_id,
+      id_requester: requester_id,
       selected_date: date_selected,
       starting_time: time_starting
     });
@@ -55,6 +56,16 @@ async function create_appointment(current_appointment) {
     if (!exists || (exists && exists.cancelled_fixer)) {
       appointment = new Appointment(current_appointment);
       await appointment.save();
+      return { result: true, message_state: 'Cita creada correctamente.' };
+    } else if (exists && exists.schedule_state === 'cancelled') {
+      const id_appointmente_exists = exists._id;
+      current_appointment.schedule_state = 'booked';
+      current_appointment.reprogram_reason = '';
+      await Appointment.findByIdAndUpdate(
+        id_appointmente_exists,
+        { $set: current_appointment },
+        { new: true }
+      );
       return { result: true, message_state: 'Cita creada correctamente.' };
     } else {
       return { result: true, message_state: 'No se puede crear la cita, la cita ya existe.' };

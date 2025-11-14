@@ -12,7 +12,8 @@ import {
   getAppointmentsByFixerIdAndDate,
   getCancelledSchedulesByRequesterDay,
   getCancelledSchedulesByFixerDay,
-  getSixMonthsAppointments
+  getSixMonthsAppointments,
+  getNumberOfAppointments
 } from './read_controller.js';
 
 const router = Router();
@@ -52,5 +53,6 @@ router.get('/schedules/get_cancelled_appointments_by_fixer_date', getCancelledSc
 
 router.get('/schedules/get_six_months_appointments', getSixMonthsAppointments);
 
+router.get('/schedules/get_number_of_appointments', getNumberOfAppointments);
 
 export default router;

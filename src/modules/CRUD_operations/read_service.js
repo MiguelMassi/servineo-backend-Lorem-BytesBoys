@@ -421,6 +421,48 @@ export async function get_six_months_appointments(fixer_id, date) {
   }
 }
 
+export async function get_number_of_appointments(fixer_id, month, year) {
+  try {
+    const startOfMonth = new Date(year, month - 1, 1);
+    const endOfMonth = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    console.log(startOfMonth, endOfMonth);
+    const result = await Appointment.aggregate([
+      {
+        $match: {
+          id_fixer: fixer_id,
+          selected_date: {
+            $gte: startOfMonth,
+            $lt: endOfMonth
+          },
+          cancelled_fixer: false
+        }
+      },
+      {
+        $group: {
+          _id: { $dayOfMonth: "$selected_date" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const countMap = new Map();
+    result.forEach(item => {
+      countMap.set(item._id, item.count);
+    });
+
+    const appointmentsByDay = {};
+    for (let day = 1; day <= daysInMonth; day++) {
+      appointmentsByDay[day] = countMap.get(day) || 0;
+    }
+
+    return appointmentsByDay;
+  } catch (error) {
+    throw new Error(error.message);
+  }
+}
+
 export {
   get_all_requester_schedules_by_fixer_month,
   get_requester_schedules_by_fixer_month,
@@ -430,5 +472,5 @@ export {
   get_requester_schedules_by_fixer_day,
   get_other_requester_schedules_by_fixer_day,
   get_appointment_by_fixer_id_hour,
-  get_fixer_availability
+  get_fixer_availability,
 };

@@ -3,9 +3,12 @@ import LocationRoutes from '../modules/location/location.routes.js';
 import CreateRoutes from '../modules/CRUD_operations/create_routes.js';
 import ReadRoutes from '../modules/CRUD_operations/read_routes.js';
 import UpdateRoutes from '../modules/CRUD_operations/update_routes.js';
+import NotificationRoutes from '../modules/notifications/notification.routes.js';
+
 // import HealthRoutes from '../modules/health/health.routes';
 
 const router = Router();
+router.use('/api/notifications', NotificationRoutes);
 
 // router.use('/api', HealthRoutes);
 router.use('/api/location', LocationRoutes);

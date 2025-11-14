@@ -13,7 +13,8 @@ import {
   get_appointments_by_fixer_id_date,
   get_cancelled_schedules_by_requester_day,
   get_cancelled_schedules_by_fixer_day,
-  get_six_months_appointments
+  get_six_months_appointments,
+  get_number_of_appointments
 } from './read_service.js'; // llamamos al service
 
 // Obtener horarios de un requester en un mes específico
@@ -325,6 +326,22 @@ export async function getSixMonthsAppointments(req, res) {
     return res.status(200).json({
       message: 'Six months appointments fetched successfully',
       appointments: data
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Error fetching data: ' + err.message });
+  }
+}
+
+export async function getNumberOfAppointments(req, res) {
+  try {
+    const { fixer_id, month, year } = req.query;
+    if (!fixer_id || !month || !year) {
+      return res.status(500).json({ message: 'Parameter fixer_id, month and year are required' });
+    }
+    const data = await get_number_of_appointments(fixer_id, month, year);
+    return res.status(200).json({
+      message: 'Number of appointments fetched successfully',
+      number_of_appointments: data
     });
   } catch (err) {
     return res.status(500).json({ message: 'Error fetching data: ' + err.message });
